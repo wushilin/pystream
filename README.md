@@ -67,6 +67,18 @@ pystream.Stream([1,2,3]).map(lambda x: x+1).for_each(print)
 3
 4
 
+# Mapping in parallel. Note this consumes the entire stream, and return result in the original order. If it is infinite stream, this will cause out of memory error
+    def slow_map(x):
+        """ A slow mapping function that takes 2 seconds """
+        sleep(2)
+        return x * 2
+
+    Stream.generate(lambda:5).limit(10).parallel_map(slow_map).for_each(print) # default using 10 threads
+    Stream.generate(lambda:5).limit(10).parallel_map(slow_map, thread_count=20).for_each(print) # using 20 threads to map concurrently
+		thread_pool = ThreadPoolExecutor(max_workers=50)
+    Stream.generate(lambda:5).limit(10).parallel_map(slow_map, thread_pool=thread_pool).for_each(print) # re-use thread pool
+
+		# All of above calls will take 2 seconds, instead of 20 seconds if executed in map instead of parallel_map
 # Filtering
 pystream.Stream(range(0, 55)).filter(lambda x: x>50).for_each(print)
 51

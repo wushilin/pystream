@@ -1,3 +1,7 @@
+from concurrent.futures import ThreadPoolExecutor
+from time import sleep
+
+
 class GeneratorIterator:
     def __init__(self, func):
         self.func = func
@@ -146,6 +150,22 @@ class Stream:
     def map(self, mapper):
         """Return a new stream after applying mapper function. Stream is NOT consumed!"""
         return Stream(MapperIterator(self.src, mapper), self.begin_func, self.exit_func)
+
+    def parallel_map(self, mapper, thread_pool=None, thread_count=10):
+        """same as map, but do in parallel, this consumes the stream instantly, and return only after all mapper are done,
+
+        if thread_pool is given, use that pool. Otherwise, use a new thread pool,with max thread set to thread_count
+        Order is preserved
+        """
+        if thread_pool is not None:
+            def future_mapper(x):
+                return thread_pool.submit(mapper, x)
+            return Stream(self.map(future_mapper).to_list(), self.begin_func, self.exit_func).map(lambda x:x.result())
+        else:
+            with ThreadPoolExecutor(max_workers=thread_count) as executor:
+                def future_mapper(x):
+                    return executor.submit(mapper, x)
+                return Stream(self.map(future_mapper).to_list(), self.begin_func, self.exit_func).map(lambda x:x.result())
 
     def filter(self, filterfunc):
         """Return a new stream after applying filter function. Stream is NOT consumed!"""
@@ -317,3 +337,9 @@ if __name__ == "__main__":
         return a
     
     Stream.generate(fib).limit(10).for_each(print)
+
+    def slow_map(x):
+        sleep(2)
+        return x * 2
+
+    Stream.generate(lambda:5).limit(10).parallel_map(slow_map).for_each(print)
