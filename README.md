@@ -34,6 +34,7 @@ from pystream.pystream import Stream
 ### Creating: stream can be created from iterable, or iterator
 ```python
 # Create stream from iterable (e.g. collections)
+# This might be bounded or unbouded
 stream = Stream(range(0, 100))
 stream = Stream([1,2,3,4,5,6])
 dict1 = {'k1': 'v1', 'k2': 'v2'}
@@ -42,6 +43,7 @@ key_stream = Stream(dict1.keys())
 value_stream.map(lambda k: dict1[k])
 
 # Create stream from iterator!
+# This might be bounded or unbounded
 string = "hello, world"
 iterator = iter(string)
 stream = Stream(iterator)
@@ -50,6 +52,14 @@ stream = Stream(iterator)
 # You have to use with the "WITH" keyword so stream can be closed
 with Stream.from_file_lines("example.txt") as stream:
    # use stream
+
+# Create stream from iterative function
+# effectively, [seed, func(seed), func(func(seed)), func(func(func(seed))), ...]
+# This generated is an unbounded stream, however generator can raise StopIteration for EOF
+def adder(x):
+    return x + 1
+
+Stream.iterate(1, adder).limit(5) # [0, 1, 2, 3, 4]
 
 # Stream can optionally attach a begin function and exit function so with keywords can be done gracefully.
 # begin_func is executed before the consumption
@@ -61,18 +71,19 @@ with Stream(dbcursor, begin_func=lambda x:print("I am executed before stream is 
 # Creating from generator func, this stream is unbouded. don't reduce on them(count, sum, max, min etc), don't parallel map
 # but map, filter, limit etc is fine, since map, filter are lazy.
 # if your generator is bounded, raise StopIteration after last element then this stream is unbounded.
+# This is typically unbouded, unless generator raise StopIteration
 s1 = Stream.generate(lambda:5) # infinite number of 5s, if you count, it hangs!
 s1.limit(1000).sum() # should be 5000
 
 a = 1
 b = 1
 def fib():
-	global a
-	global b
-  a, b = b, a+b
-  if a > 100000000000:
-    raise StopIteration
-	return a
+    global a
+    global b
+    a, b = b, a+b
+    if a > 100000000000:
+      raise StopIteration
+    return a
 # Generating stream from fibonacci sequence, up to 100000000000. 
 # Generating is not an infinite loop, it is lazy!
 Stream.generate(fib).limit(10).for_each(print)
@@ -107,10 +118,10 @@ Stream([1,2,3]).map(lambda x: x+1).for_each(print)
 
     Stream.generate(lambda:5).limit(10).parallel_map(slow_map).for_each(print) # default using 10 threads
     Stream.generate(lambda:5).limit(10).parallel_map(slow_map, thread_count=20).for_each(print) # using 20 threads to map concurrently
-		thread_pool = ThreadPoolExecutor(max_workers=50)
+    thread_pool = ThreadPoolExecutor(max_workers=50)
     Stream.generate(lambda:5).limit(10).parallel_map(slow_map, thread_pool=thread_pool).for_each(print) # re-use thread pool
 
-		# All of above calls will take 2 seconds, instead of 20 seconds if executed in map instead of parallel_map
+    # All of above calls will take 2 seconds, instead of 20 seconds if executed in map instead of parallel_map
 # Filtering
 Stream(range(0, 55)).filter(lambda x: x>50).for_each(print)
 51
@@ -256,14 +267,11 @@ Stream(["I love python"]).repeat(20) #["I love python", .... "I love python"] (2
         for i in stream:
             print(f"{name} => consumed {i}")
 
-    with s1:
-      with s2:
-        with s3:
-          with s4:
-            t1 = threading.Thread(target=slow_consume, args=("s1", s1))
-            t2 = threading.Thread(target=consume_asap, args=("s2", s2))
-            t3 = threading.Thread(target=consume_asap, args=("s3", s3))
-            t4 = threading.Thread(target=consume_asap, args=("s4", s4))
-            Stream([t1, t2, t3, t4]).for_each(lambda x: x.start())
-            Stream([t1, t2, t3, t4]).for_each(lambda x: x.join())
+    with s1, s2, s3, s4:
+        t1 = threading.Thread(target=slow_consume, args=("s1", s1))
+        t2 = threading.Thread(target=consume_asap, args=("s2", s2))
+        t3 = threading.Thread(target=consume_asap, args=("s3", s3))
+        t4 = threading.Thread(target=consume_asap, args=("s4", s4))
+        Stream([t1, t2, t3, t4]).for_each(lambda x: x.start())
+        Stream([t1, t2, t3, t4]).for_each(lambda x: x.join())
 ```

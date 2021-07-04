@@ -206,6 +206,18 @@ class BlockingQueueIterator:
         else:
             return next
 
+
+class IterativeIterator:
+    def __init__(self, seed, func):
+        self.seed = seed
+        self.func = func
+
+    def __next__(self):
+        result = self.seed
+        self.seed = self.func(self.seed)
+        return result
+
+
 class EndawareIterator:
     def __init__(self, src, queue, last):
         self.src = src
@@ -337,6 +349,11 @@ class Stream:
     def generate(func):
         return Stream(GeneratorIterator(func))
 
+    @staticmethod
+    def iterate(seed, func):
+        """Create stream who's first value is seed. subsequent values are repeated application of seed to the func."""
+        return Stream(IterativeIterator(seed, func))
+
     def min(self):
         """Similar to max, but find minimum. This consumes the stream"""
         def min_cmp(a, b):
@@ -411,15 +428,16 @@ class Stream:
     def uniq(self):
         """Create stream of unique elements. Order is preserved.
         Note that this consumes all elements! Don't use on unbounded stream or super large streams."""
-        consumed = list(self)
         emitted = set()
+
         def emit_filter(x):
             if x in emitted:
                 return False
             else:
                 emitted.add(x)
                 return True
-        return Stream(consumed, self.begin_func, self.exit_func).filter(emit_filter)
+
+        return self.filter(emit_filter)
 
     def to_list(self):
         """Convert stream to list. alternatively, list(stream) does the samething, since stream itself is iterable.
@@ -472,7 +490,7 @@ class Stream:
         return Stream(ConcatIterator(self.src, next.src), new_begin, new_exit)
 
     def split(self, count=2):
-        """Split this stream into 2 streams. First one is primary stream, second one consumption is depend on consumption by first one.
+        """Split this stream into count streams. First one is primary stream, subsequent ones' consumption is depend on consumption by first one.
         The elements are available on second one only after first one had consumed it.
         Remember to consume first split stream.
 
@@ -597,28 +615,24 @@ if __name__ == "__main__":
     s1, s2, s3, s4 = Stream([1,2,3,4,5],lambda:print("Begin"), lambda:print("end")).split(4)
     
     def slow_consume(name, stream):
-        iter = stream.__iter__()
-        while True:
-            try:
-                i = iter.__next__()
-                print(f"{name} => consumed {i}")
-            except StopIteration:
-                break
+        for i in stream:
+            print(f"{name} => consumed {i}")
             sleep(1)
 
     def consume_asap(name, stream):
         for i in stream:
             print(f"{name} => consumed {i}")
-            
-    with s1:
-      with s2:
-        with s3:
-          with s4:
-            t1 = threading.Thread(target=slow_consume, args=("s1", s1))
-            t2 = threading.Thread(target=consume_asap, args=("s2", s2))
-            t3 = threading.Thread(target=consume_asap, args=("s3", s3))
-            t4 = threading.Thread(target=consume_asap, args=("s4", s4))
-            Stream([t1, t2, t3, t4]).for_each(lambda x: x.start())
-            Stream([t1, t2, t3, t4]).for_each(lambda x: x.join())
+
+    with s1, s2, s3, s4:
+        t1 = threading.Thread(target=slow_consume, args=("s1", s1))
+        t2 = threading.Thread(target=consume_asap, args=("s2", s2))
+        t3 = threading.Thread(target=consume_asap, args=("s3", s3))
+        t4 = threading.Thread(target=consume_asap, args=("s4", s4))
+        Stream([t1, t2, t3, t4]).for_each(lambda x: x.start())
+        Stream([t1, t2, t3, t4]).for_each(lambda x: x.join())
 
     # if you run s2.for_each, it will block forever!
+    def adder(x):
+        return x + 1
+    
+    Stream.iterate(1, adder).limit(10).for_each(print)
