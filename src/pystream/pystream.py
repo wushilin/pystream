@@ -190,7 +190,7 @@ class FileChunkIterator:
         count = self.fd.readinto(self.buffer)
         if count is None or count == 0:
             raise StopIteration
-        return self.buffer, count
+        return self.buffer[:count]
 
     def close(self):
         self.fd.close()
@@ -363,13 +363,15 @@ class Stream:
 
     @staticmethod
     def from_file_chunks(filename, buffer=None, buffer_size=4096):
-        """Read file in binary, by chunks. Each stream element is a tuple (bytearray, count)
+        """Read file in binary, by chunks. Each stream element is a byte array
         Stream exhausts when file is fully read
         If buffer (bytearray) is specified, buffer is used.
         Otherwise, if buffer_size is specified, new bytearray(buffer_size) would be used.
         buffer_size, when not specified, defaults to 4096 bytes.
 
         This should be faster than allocating new buffer on every new read.
+
+        This iterator re-uses buffer, so it should be much faster with file.read!
         """
         if buffer is None:
             buffer = bytearray(buffer_size)
@@ -668,5 +670,8 @@ if __name__ == "__main__":
     
     Stream.iterate(1, adder).limit(10).for_each(print)
 
-    with Stream.from_file_chunks("src/pystream/pystream.py").skip(2) as stream:
-        stream.for_each(lambda x: print((x[0][:x[1]]).decode("utf-8")))
+    # Copy file
+    with Stream.from_file_chunks("src/pystream/pystream.py").skip(0) as stream:
+        with open("output.py", "wb") as output:
+            stream.for_each(lambda x: output.write(x))
+
