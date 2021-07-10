@@ -274,4 +274,38 @@ Stream(["I love python"]).repeat(20) #["I love python", .... "I love python"] (2
         t4 = threading.Thread(target=consume_asap, args=("s4", s4))
         Stream([t1, t2, t3, t4]).for_each(lambda x: x.start())
         Stream([t1, t2, t3, t4]).for_each(lambda x: x.join())
+
+
+
+    # Create random string from charset, with length
+    Stream.random_strings("ABCDEFG", 12).limit(20).for_each(print)
+    
+    # Default length is 5
+    Stream.random_chars("ABCDEFG").limit(20).for_each(print)
+    
+    # Create random integers with [lower, upper) range
+    Stream.random_ints(0, 10).limit(20).for_each(print)
+    
+    # Create floats with scale [0, scale)
+    Stream.random_floats(10).limit(20).for_each(print)
+    
+    # String for upper case characters
+    print("Upper")
+    
+    # Lower case
+    Stream.random_alphabets(length=5, lower=False).limit(20).for_each(print)
+    print("Lower")
+    Stream.random_alphabets(length=6, lower=True).limit(20).for_each(print)
+    
+    # Upper case hex of length 5
+    print("Upper ")
+    Stream.random_hex_strings(length=5).limit(20).for_each(print)
+    
+    # Lower case hex of length 10
+    print("Lower hex")
+    Stream.random_hex_strings(length=10, lower=True).limit(20).for_each(print)
+    
+    # Random string in list
+    list_new = [x for x in Stream.random_strings().limit(10)]
+    print(list_new)
 ```

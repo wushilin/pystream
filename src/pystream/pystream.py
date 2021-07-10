@@ -1,7 +1,7 @@
 from concurrent.futures import ThreadPoolExecutor
 from time import sleep
-from collections.abc import Sequence 
-from threading import Thread, Lock
+from collections.abc import Sequence
+import random
 import queue
 import threading
 
@@ -234,6 +234,41 @@ class IterativeIterator:
         return result
 
 
+class RandomIntIterator:
+    def __init__(self, low, high):
+        self.low = low
+        self.high = high
+
+    def __next__(self):
+        return random.randrange(self.low, self.high)
+
+
+class RandomFloatIterator:
+    def __init__(self, scale=1):
+        self.scale = scale
+
+    def __next__(self):
+        return random.random() * self.scale
+
+
+class RandomCharIterator:
+    def __init__(self, seed):
+        self.seed = seed
+        
+    def __next__(self):
+        return self.seed[random.randrange(0, len(self.seed))]
+
+
+class RandomStringIterator:
+    def __init__(self, seed, length):
+        self.seed = seed
+        self.length = length
+        
+    def __next__(self):
+        chars = [self.seed[random.randrange(0, len(self.seed))] for _ in range(0, self.length)]
+        return "".join(chars)
+
+
 class EndawareIterator:
     def __init__(self, src, queue, last):
         self.src = src
@@ -251,7 +286,15 @@ class EndawareIterator:
                 q.put(self.last)
             raise StopIteration
 
+
 class Stream:
+    digits = "0123456789"
+    alphabets_lower = "abcdefghijklmnopqrstuvwxyz"
+    alphabets_upper = alphabets_lower.upper()
+    default_chars = digits + alphabets_lower + alphabets_lower
+    hex_chars_upper = "0123456789ABCDEF"
+    hex_chars_lower = hex_chars_upper.lower()
+    
     def __init__(self, src, begin_func=None, exit_func=None):
         """Create a stream from an iterator (e.g. iter(list)), or an iterable (e.g. list)
         Optionally, pass in a begin func (when used in WITH keyword), and exit_func (for cleanup)
@@ -386,6 +429,38 @@ class Stream:
     def iterate(seed, func):
         """Create stream who's first value is seed. subsequent values are repeated application of seed to the func."""
         return Stream(IterativeIterator(seed, func))
+
+    @staticmethod
+    def random_number_strings(length=5):
+        return Stream.random_strings(Stream.digits, length)
+    
+    @staticmethod
+    def random_alphabets(length=5, lower=False):
+        if lower:
+            return Stream.random_strings(Stream.alphabets_lower, length)
+        return Stream.random_strings(Stream.alphabets_upper, length)
+    
+    @staticmethod
+    def random_hex_strings(length=5, lower=False):
+        if lower:
+            return Stream.random_strings(Stream.hex_chars_lower, length)
+        return Stream.random_strings(Stream.hex_chars_upper, length)
+
+    @staticmethod
+    def random_strings(chars=default_chars, length=5):
+        return Stream(RandomStringIterator(chars, length))
+
+    @staticmethod
+    def random_chars(chars=default_chars):
+        return Stream(RandomCharIterator(chars))
+
+    @staticmethod
+    def random_ints(low, high):
+        return Stream(RandomIntIterator(low, high))
+
+    @staticmethod
+    def random_floats(scale=1):
+        return Stream(RandomFloatIterator(scale))
 
     def min(self):
         """Similar to max, but find minimum. This consumes the stream"""
@@ -675,3 +750,20 @@ if __name__ == "__main__":
         with open("output.py", "wb") as output:
             stream.for_each(lambda x: output.write(x))
 
+    Stream.random_strings("ABCDEFG", 12).limit(20).for_each(print)
+    Stream.random_chars("ABCDEFG").limit(20).for_each(print)
+    Stream.random_ints(0, 10).limit(20).for_each(print)
+    Stream.random_floats(10).limit(20).for_each(print)
+    print("Lower")
+    Stream.random_alphabets(length=5, lower=False).limit(20).for_each(print)
+    print("Lower")
+    Stream.random_alphabets(length=6, lower=True).limit(20).for_each(print)
+    
+    print("Upper ")
+    Stream.random_hex_strings(length=5).limit(20).for_each(print)
+    
+    print("Lower hex")
+    Stream.random_hex_strings(length=10, lower=True).limit(20).for_each(print)
+
+    list_new = [x for x in Stream.random_strings().limit(10)]
+    print(list_new)
