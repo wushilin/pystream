@@ -269,6 +269,35 @@ class RandomStringIterator:
         return "".join(chars)
 
 
+class DropWhileIterator:
+    def __init__(self, src, tester):
+        self.src = src
+        self.tester = tester
+        self.dropping = True
+
+    def __next__(self):
+        if not self.dropping:
+            return self.src.__next__()
+        
+        while True:
+            nextval = self.src.__next__()
+            if not self.tester(nextval):
+                self.dropping = False
+                return nextval
+
+
+class TakeWhileIterator:
+    def __init__(self, src, tester):
+        self.src = src
+        self.tester = tester
+    
+    def __next__(self):
+        nextval = self.src.__next__()
+        if self.tester(nextval):
+            return nextval
+        raise StopIteration
+
+
 class EndawareIterator:
     def __init__(self, src, queue, last):
         self.src = src
@@ -342,6 +371,14 @@ class Stream:
                     return executor.submit(mapper, x)
                 return Stream(self.map(future_mapper).to_list(), self.begin_func, self.exit_func).map(lambda x:x.result())
 
+    def drop_while(self, testingfunc):
+        """Dropping until the testing func rejects the value. Subsequent values are not tested again"""
+        return Stream(DropWhileIterator(self.src, testingfunc), self.begin_func, self.exit_func)
+    
+    def take_while(self, testingfunc):
+        """Keep taking while tester is true"""
+        return Stream(TakeWhileIterator(self.src, testingfunc), self.begin_func, self.exit_func)
+    
     def filter(self, filterfunc):
         """Return a new stream after applying filter function. Stream is NOT consumed!"""
         return Stream(FilterIterator(self.src, filterfunc), self.begin_func, self.exit_func)
@@ -767,3 +804,7 @@ if __name__ == "__main__":
 
     list_new = [x for x in Stream.random_strings().limit(10)]
     print(list_new)
+
+    print(list(Stream(range(0, 100)).take_while(lambda x:x < 10)))
+    
+    print(list(Stream(range(0, 100)).drop_while(lambda x:x < 10 or x > 20)))
